@@ -1,0 +1,78 @@
+# Cursor AI Rules for Scientific Computing & Machine Learning Project
+
+## Project Context
+This is a scientific computing project focused on solving Dirichlet and Neumann boundary value problems using Graph Neural Network Preconditioners (GNP) for accelerating iterative linear solvers like GMRES.
+
+## Code Style & Formatting
+- Use Python 3.8+ features and type hints where appropriate
+- Follow PEP 8 with line length of 88 characters (Black formatter standard)
+- Use descriptive variable names, especially for mathematical variables
+- Comment mathematical formulas and algorithms clearly
+- Use docstrings for all functions and classes (NumPy style)
+
+## Scientific Computing Best Practices
+- Always specify dtype explicitly for PyTorch tensors and NumPy arrays
+- Use device-agnostic code (support both CPU and CUDA)
+- Handle memory management carefully for large matrices
+- Add convergence checks and early stopping in iterative algorithms
+- Include timing and profiling information for performance analysis
+- Validate numerical stability and convergence properties
+- Use proper error handling for numerical edge cases
+
+## Machine Learning Guidelines
+- Separate model definition, training, and inference code
+- Use proper random seed setting for reproducibility
+- Implement checkpointing and model saving/loading
+- Add progress bars for long-running operations
+- Use proper data loading and batching strategies
+- Implement proper validation and testing splits
+- Monitor training metrics and convergence
+
+## File Organization
+- Keep main experiment scripts in root directory
+- Organize utilities in GNP/ package structure
+- Place all outputs in output/ directory
+- Use clear naming conventions for saved models and results
+- Separate configuration from implementation code
+
+## Documentation Requirements
+- Explain mathematical background in comments
+- Document solver parameters and their effects
+- Include performance benchmarks and comparisons
+- Provide usage examples for key functions
+- Document hardware requirements and dependencies
+
+## Error Handling
+- Catch and handle CUDA out-of-memory errors gracefully
+- Provide informative error messages for convergence failures
+- Handle matrix conditioning and singularity issues
+- Validate input dimensions and data types
+- Add warnings for potentially unstable numerical operations
+
+## Performance Considerations
+- Use vectorized operations instead of loops where possible
+- Leverage PyTorch's automatic differentiation efficiently
+- Consider memory vs. computation trade-offs
+- Profile and optimize bottleneck operations
+- Use appropriate precision (float32 vs float64) based on needs
+
+## Dependencies & Environment
+- Pin exact versions for reproducibility
+- Use conda/pip requirements files
+- Document CUDA version compatibility
+- Specify minimum hardware requirements
+- Test on both CPU and GPU environments
+
+## Testing & Validation
+- Include unit tests for core mathematical functions
+- Validate against known analytical solutions
+- Test numerical stability with different problem sizes
+- Benchmark against standard preconditioners
+- Verify gradient computations in neural networks
+
+## Code Review Focus Areas
+- Numerical correctness and stability
+- Memory efficiency and device handling
+- Algorithm convergence properties
+- Code readability and mathematical clarity
+- Performance optimization opportunities 
