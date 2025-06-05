@@ -93,3 +93,4 @@ temp/
 # Git related (if submodules)
 .git/
 .gitignore
+.cursorrules
