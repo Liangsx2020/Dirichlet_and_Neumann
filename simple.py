@@ -16,7 +16,7 @@ def main():
 
     # Setup and parameters
 
-    n = 8
+    n = 64
 
 
     restart = 10                # restart cycle in GMRES
@@ -46,10 +46,10 @@ def main():
     print(f'Using device: {device}')
 
     # Load problem
-    A = gen_2d_poisson_matrix(n)
+    A = gen_2d_poisson_matrix_improved_neumann(n)
 
     # Right-hand side b
-    b = build_rhs_2d(n)
+    b = build_rhs_2d_improved_neumann(n)
 
     # Output path and filename
     out_path = os.path.abspath(os.path.expanduser("./output"))
