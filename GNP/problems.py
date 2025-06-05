@@ -233,7 +233,6 @@ def generate_exact_solution(N, domain_size=1.0):
     return p_exact, p_exact_grid, X, Y
 
 
-
 def compute_L2_error(numerical_solution, N, domain_size=1.0):
     """
     Compute the L2 error between the numerical solution and the exact solution.
