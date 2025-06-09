@@ -75,7 +75,7 @@ class GCNConv(nn.Module):
 
 
 # -----------------------------------------------------------------------------
-# GCN with residual connections.
+# GCN with residual connections - Simplified and more robust.
 class ResGCN(nn.Module):
     
     def __init__(self, A, num_layers, embed, hidden, drop_rate, device,
@@ -86,43 +86,75 @@ class ResGCN(nn.Module):
         self.embed = embed
         self.scale_input = scale_input
         self.device = device
+        self.n = A.shape[0]  # Store problem size
 
         # Move A to device and normalize
         self.AA = scale_A_by_spectral_radius(A).to(dtype).to(device)
 
-        # Move all modules to device
-        self.mlp_initial = MLP(1, embed, 4, hidden, drop_rate).to(device)
-        self.mlp_final = MLP(embed, 1, 4, hidden, drop_rate,
+        # Simplified input/output processing
+        self.mlp_initial = MLP(1, embed, 3, hidden, drop_rate).to(device)  # Reduce layers
+        self.mlp_final = MLP(embed, 1, 3, hidden, drop_rate,  # Reduce layers
                              is_output_layer=True).to(device)
+        
+        # GCN layers with simple residual connections
         self.gconv = nn.ModuleList()
         self.skip = nn.ModuleList()
-        self.batchnorm = nn.ModuleList()
+        self.layer_norm = nn.ModuleList()  # Use LayerNorm for stability
+        
         for i in range(num_layers):
             self.gconv.append(GCNConv(self.AA, embed, embed, device))
             self.skip.append(nn.Linear(embed, embed).to(device))
-            self.batchnorm.append(nn.BatchNorm1d(embed).to(device))
+            self.layer_norm.append(nn.LayerNorm(embed).to(device))
+            
         self.dropout = nn.Dropout(drop_rate)
+        
+        # Improved initialization
+        self._initialize_weights()
+
+    def _initialize_weights(self):
+        """Initialize weights for stable training"""
+        for module in self.modules():
+            if isinstance(module, nn.Linear):
+                nn.init.xavier_uniform_(module.weight, gain=0.1)  # Small gain for stability
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
 
     def forward(self, r):                        # r: (n, batch_size)
         assert len(r.shape) == 2
         n, batch_size = r.shape
-        r = r.to(self.device)  # Move input to device
+        r = r.to(self.device)
         
+        # Input scaling with better numerical stability
         if self.scale_input:
-            scaling = torch.linalg.vector_norm(r, dim=0) / np.sqrt(n)
-            r = r / scaling  # scaling
-        r = r.view(n, batch_size, 1)                # (n, batch_size, 1)
+            scaling = torch.linalg.vector_norm(r, dim=0, keepdim=True) / np.sqrt(n)
+            scaling = torch.clamp(scaling, min=1e-12)  # Better numerical stability
+            r = r / scaling
+        
+        r = r.view(n, batch_size, 1)
         R = self.mlp_initial(r)                     # (n, batch_size, embed)
         
+        # Simplified GCN layers with residual connections
         for i in range(self.num_layers):
-            R = self.gconv[i](R) + self.skip[i](R)  # (n, batch_size, embed)
-            R = R.view(n * batch_size, self.embed)  # (n * batch_size, embed)
-            R = self.batchnorm[i](R)                # (n * batch_size, embed)
-            R = R.view(n, batch_size, self.embed)   # (n, batch_size, embed)
-            R = self.dropout(F.relu(R))             # (n, batch_size, embed)
+            R_input = R
+            
+            # GCN transformation with residual
+            R_gcn = self.gconv[i](R)
+            R_skip = self.skip[i](R)
+            R = R_gcn + R_skip  # Simple residual connection
+            
+            # Add deeper residual every few layers
+            if i > 0 and i % 2 == 1:
+                R = R + R_input
+                
+            # Normalization and activation
+            R = R.view(n * batch_size, self.embed)
+            R = self.layer_norm[i](R)
+            R = R.view(n, batch_size, self.embed)
+            R = self.dropout(F.relu(R))  # Use ReLU for simplicity
             
         z = self.mlp_final(R)                       # (n, batch_size, 1)
-        z = z.view(n, batch_size)                   # (n, batch_size)
+        z = z.view(n, batch_size)
+        
         if self.scale_input:
-            z = z * scaling  # scaling back
+            z = z * scaling.squeeze(0)  # Scale back
         return z

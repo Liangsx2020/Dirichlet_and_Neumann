@@ -51,14 +51,20 @@ class StreamingDataset(IterableDataset):
 
             elif self.training_data == 'x_mix':
             
-                batch_size1 = self.batch_size // 2
+                batch_size1 = self.batch_size // 3  # Reduce to 1/3 for subspace
                 e = torch.normal(0, 1, size=(self.m, batch_size1),
                                  dtype=torch.float64)
-                x = self.Q @ e
-                batch_size2 = self.batch_size - batch_size1
+                x1 = self.Q @ e
+                
+                batch_size2 = self.batch_size // 3  # 1/3 for normal random
                 x2 = torch.normal(0, 1, size=(self.n, batch_size2),
                                   dtype=torch.float64)
-                x = torch.cat([x, x2], dim=1)
+                
+                # Add multi-frequency training data for remaining batch
+                batch_size3 = self.batch_size - batch_size1 - batch_size2
+                x3 = self._generate_multi_frequency_data(batch_size3)
+                
+                x = torch.cat([x1, x2, x3], dim=1)
                 yield x
 
             else: # self.training_data == 'no_x'
@@ -67,6 +73,43 @@ class StreamingDataset(IterableDataset):
                                  dtype=torch.float64)
                 yield b
             
+    def _generate_multi_frequency_data(self, batch_size):
+        """Generate training data with multiple frequency components"""
+        if batch_size <= 0:
+            return torch.empty(self.n, 0, dtype=torch.float64)
+            
+        # Assume 2D grid problem for now
+        n_side = int(np.sqrt(self.n))
+        if n_side * n_side != self.n:
+            # Fallback to random data if not a square grid
+            return torch.normal(0, 1, size=(self.n, batch_size), dtype=torch.float64)
+        
+        x_batch = []
+        for _ in range(batch_size):
+            # Generate random frequencies
+            freq_x = np.random.uniform(0.5, 8.0)  # Multiple frequency scales
+            freq_y = np.random.uniform(0.5, 8.0)
+            phase_x = np.random.uniform(0, 2*np.pi)
+            phase_y = np.random.uniform(0, 2*np.pi)
+            
+            # Create 2D sinusoidal pattern
+            x_coords = torch.linspace(0, 1, n_side, dtype=torch.float64)
+            y_coords = torch.linspace(0, 1, n_side, dtype=torch.float64)
+            X, Y = torch.meshgrid(x_coords, y_coords, indexing='ij')
+            
+            pattern = (torch.sin(freq_x * 2 * np.pi * X + phase_x) * 
+                      torch.sin(freq_y * 2 * np.pi * Y + phase_y))
+            pattern = pattern.flatten()
+            
+            # Add some noise
+            pattern += 0.1 * torch.normal(0, 1, size=pattern.shape, dtype=torch.float64)
+            x_batch.append(pattern.unsqueeze(1))
+        
+        if x_batch:
+            return torch.cat(x_batch, dim=1)
+        else:
+            return torch.empty(self.n, 0, dtype=torch.float64)
+
     def __iter__(self):
         return iter(self.generate())
 
@@ -112,10 +155,16 @@ class GNP():
             else: # self.training_data == 'no_x'
                 b = x_or_b[0].to(self.device).to(self.dtype)
 
-            # Train
+            # Train - Improved loss function for preconditioning
             x_out = self.net(b)
-            b_out = (self.A @ x_out.to(torch.float64)).to(self.dtype)
-            loss = F.l1_loss(b_out, b)
+            # Focus on preconditioning equation: we want M(b) ≈ inv(A)b = x
+            if self.training_data != 'no_x':
+                # For training data where we know x, use direct loss
+                loss = F.mse_loss(x_out, x)  # Use MSE for better gradient signal
+            else:
+                # For unknown x, use residual-based loss
+                b_out = (self.A @ x_out.to(torch.float64)).to(self.dtype)
+                loss = F.mse_loss(b_out, b)
 
             # Bookkeeping
             hist_loss.append(loss.item())
@@ -132,7 +181,11 @@ class GNP():
                 optimizer.step()
                 optimizer.zero_grad()
                 if scheduler is not None:
-                    scheduler.step()
+                    # Handle different scheduler types
+                    if hasattr(scheduler, 'step') and 'metrics' in scheduler.step.__code__.co_varnames:
+                        scheduler.step(loss.item())  # For ReduceLROnPlateau
+                    else:
+                        scheduler.step()  # For other schedulers
 
             # Bookkeeping (cont.)
             if progress_bar:
