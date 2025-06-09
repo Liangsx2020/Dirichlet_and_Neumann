@@ -46,10 +46,10 @@ def main():
     print(f'Using device: {device}')
 
     # Load problem
-    A = gen_2d_poisson_matrix_improved_neumann(n)
+    A = gen_2d_poisson_matrix(n)
 
     # Right-hand side b
-    b = build_rhs_2d_improved_neumann(n)
+    b = build_rhs_2d(n)
 
     # Output path and filename
     out_path = os.path.abspath(os.path.expanduser("./output"))
